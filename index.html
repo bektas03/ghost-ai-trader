@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#090b12">
+<title>GHOST AI TRADER 002</title>
+<style>
+:root{color-scheme:dark;--bg:#090b12;--panel:#131827;--line:#263047;--muted:#91a0b9;--text:#f4f7ff;--green:#31d69a;--red:#ff647c;--purple:#9b8cff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 50% -10%,#25204b 0,#090b12 48%);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);padding:env(safe-area-inset-top) 15px calc(24px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 0}.brand{font-weight:900;letter-spacing:2px;font-size:18px}.brand span{color:var(--purple)}.pill{font-size:11px;color:var(--green);border:1px solid #246d58;padding:6px 9px;border-radius:20px}
+h1{font-size:25px;margin:8px 0}.sub,.note,.label{color:var(--muted)}.sub{font-size:13px;margin-bottom:16px}.card{background:linear-gradient(145deg,#171e30,#111624);border:1px solid var(--line);border-radius:18px;padding:16px;margin:12px 0}.label{font-size:12px}.balance{font-size:32px;font-weight:800;margin:7px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.metric{background:#0d1220;border-radius:13px;padding:12px}.metric strong{display:block;font-size:18px;margin-top:5px}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}.price{font-weight:700;font-size:18px}.green{color:var(--green)}.red{color:var(--red)}
+button,select{background:#252d44;color:white;border:1px solid #3a4562;border-radius:12px;padding:12px;font-weight:700;font-size:14px}button.primary{background:linear-gradient(90deg,#7565ed,#a17dff);border:0;width:100%;margin-top:10px}button.stop{background:#552536;border-color:#8b4057;width:100%;margin-top:9px}button:disabled{opacity:.4}select{width:100%;margin-top:8px}.note{font-size:12px;line-height:1.5}.trade{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}.trade:last-child{border:0}.signal{font-weight:800;font-size:19px;margin-top:8px}footer{text-align:center;color:#71809b;font-size:11px;padding:20px 0}
+</style>
+</head>
+<body>
+<header><div class="brand">GHOST<span>.</span>AI</div><div class="pill">● PAPER MODE</div></header>
+<h1>Trading command</h1><div class="sub">BUILD 002 · automatische demo-strategie · geen echte orders</div>
+<section class="card">
+ <div class="row"><span class="label">VIRTUEEL VERMOGEN</span><span class="label" id="status">VERBINDEN…</span></div>
+ <div class="balance" id="balance">€100,00</div>
+ <div class="grid">
+  <div class="metric"><span class="label">Totaal resultaat</span><strong id="pnl">€0,00</strong></div>
+  <div class="metric"><span class="label">Open positie</span><strong id="position">Geen</strong></div>
+  <div class="metric"><span class="label">Winnende trades</span><strong id="wins">0</strong></div>
+  <div class="metric"><span class="label">Verliezende trades</span><strong id="losses">0</strong></div>
+ </div>
+</section>
+<section class="card">
+ <div class="row"><b>Marktmonitor</b><span class="label" id="updated">—</span></div>
+ <div class="row" style="margin-top:15px"><div>BTC / USDT</div><div class="price" id="btc">Laden…</div></div>
+ <div class="row" style="margin-top:14px"><div>ETH / USDT</div><div class="price" id="eth">Laden…</div></div>
+ <p class="note" id="marketNote">Live openbare marktdata. USDT-prijzen zijn indicatief en geen EUR-uitvoeringsprijzen.</p>
+</section>
+<section class="card">
+ <b>AI-strategie (technische regels)</b>
+ <div class="signal" id="signal">MARKT ANALYSEREN…</div>
+ <p class="note" id="reason">De bot vergelijkt EMA 9/21 en RSI op recente candles. Dit is een eenvoudige regelstrategie, geen bewezen AI of winstgarantie.</p>
+ <label class="label" for="pair" style="display:block;margin-top:12px">Markt</label>
+ <select id="pair"><option value="BTCUSDT">BTC / USDT</option><option value="ETHUSDT">ETH / USDT</option></select>
+ <div class="grid" style="margin-top:10px">
+  <div class="metric"><span class="label">Risico per trade</span><strong>0,5%</strong></div>
+  <div class="metric"><span class="label">Stop-loss</span><strong>2%</strong></div>
+  <div class="metric"><span class="label">Take-profit</span><strong>3%</strong></div>
+  <div class="metric"><span class="label">Controle</span><strong>30 sec.</strong></div>
+ </div>
+ <button class="primary" id="start">START AUTO DEMO</button>
+ <button class="stop" id="stop" disabled>STOP BOT</button>
+ <p class="note">Automatische demo-transacties met gesimuleerde uitvoering. Er worden geen echte crypto's gekocht of verkocht. Geen API-sleutels nodig.</p>
+</section>
+<section class="card">
+ <div class="row"><b>Activiteitenlog</b><button id="reset">Reset</button></div>
+ <div id="log" class="note" style="margin-top:10px">Nog geen transacties.</div>
+</section>
+<footer>GHOST AI TRADER · BUILD 002 · PAPER ONLY<br>Test eerst langdurig. Resultaten uit simulatie voorspellen geen toekomstige winst.</footer>
+<script>
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat('nl-BE',{style:'currency',currency:'EUR'}).format(n);
+let cash=100,qty=0,entry=0,stopPrice=0,targetPrice=0,realized=0,openPair='',logs=[],wins=0,losses=0,running=false,timer=null,lastCandles=[],lastPrice=null,lastSignal='HOLD';
+const fee=.001;
+function render(){
+ const p=lastPrice||entry||0, equity=cash+qty*p;
+ $('balance').textContent=fmt(equity);$('pnl').textContent=fmt(equity-100);
+ $('pnl').className=equity>=100?'green':'red';
+ $('position').textContent=qty?openPair+' · '+qty.toFixed(6):'Geen';
+ $('wins').textContent=wins;$('losses').textContent=losses;
+ $('status').textContent=running?'AUTO DEMO ACTIEF':'DEMO GEREED';
+ $('start').disabled=running;$('stop').disabled=!running;
+ $('log').innerHTML=logs.length?logs.slice(0,18).map(x=>'<div class="trade">'+x+'</div>').join(''):'Nog geen transacties.';
+}
+function log(s){logs.unshift(new Date().toLocaleTimeString('nl-BE')+' · '+s);render()}
+function ema(values,period){let k=2/(period+1),v=values[0];for(let i=1;i<values.length;i++)v=values[i]*k+v*(1-k);return v}
+function rsi(values,period=14){let gains=0,loss=0;for(let i=values.length-period;i<values.length;i++){let d=values[i]-values[i-1];if(d>0)gains+=d;else loss-=d}if(loss===0)return 100;let rs=(gains/period)/(loss/period);return 100-100/(1+rs)}
+function analyze(closes){
+ if(closes.length<25)return {signal:'HOLD',why:'Onvoldoende candles om te analyseren.'};
+ let e9=ema(closes.slice(-30),9),e21=ema(closes.slice(-50),21),rv=rsi(closes,14);
+ if(e9>e21 && rv>50 && rv<68)return {signal:'BUY',why:`EMA 9 boven EMA 21; RSI ${rv.toFixed(1)}. Positief momentum.`};
+ if(e9<e21 || rv>=72)return {signal:'SELL',why:`Trend verzwakt of RSI ${rv.toFixed(1)}. Geen nieuwe longpositie.`};
+ return {signal:'HOLD',why:`Geen sterke instap. RSI ${rv.toFixed(1)}.`};
+}
+async function cycle(){
+ try{
+  const pair=$('pair').value;
+  const [ticker,kline]=await Promise.all([
+   fetch('https://api.binance.com/api/v3/ticker/price?symbol='+pair),
+   fetch('https://api.binance.com/api/v3/klines?symbol='+pair+'&interval=1m&limit=60')
+  ]);
+  if(!ticker.ok||!kline.ok)throw Error('Marktdata niet beschikbaar');
+  const t=await ticker.json(),ks=await kline.json();
+  lastPrice=Number(t.price);lastCandles=ks.map(k=>Number(k[4]));
+  const a=analyze(lastCandles);lastSignal=a.signal;
+  $(pair==='BTCUSDT'?'btc':'eth').textContent=Number(t.price).toLocaleString('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2});
+  $('updated').textContent='Update '+new Date().toLocaleTimeString('nl-BE');
+  $('signal').textContent=a.signal;$('signal').className='signal '+(a.signal==='BUY'?'green':a.signal==='SELL'?'red':'');
+  $('reason').textContent=a.why;
+  $('marketNote').textContent='Koersen via openbare Binance-marktdata; USDT is niet exact gelijk aan EUR.';
+  if(running)manageTrade(pair,a.signal,lastPrice);
+  render();
+ }catch(e){$('status').textContent='DATAFOUT';$('marketNote').textContent='Kan marktdata niet ophalen. Controleer internet en probeer opnieuw.';$('signal').textContent='GEEN DATA';}
+}
+function openTrade(pair,p){
+ if(qty||cash<=0)return;
+ const risk=cash*.005,stopDist=p*.02,units=risk/stopDist;
+ const maxUnits=cash/(p*(1+fee));qty=Math.min(units,maxUnits);
+ if(qty*p<1){qty=0;return}
+ let cost=qty*p;cash-=cost*(1+fee);entry=p;stopPrice=p*.98;targetPrice=p*1.03;openPair=pair;
+ log('AUTO DEMO BUY '+pair+' @ '+p.toFixed(2)+' · stop '+stopPrice.toFixed(2)+' · target '+targetPrice.toFixed(2));
+}
+function closeTrade(p,why){
+ if(!qty)return;
+ let proceeds=qty*p*(1-fee),result=proceeds-(qty*entry*(1+fee));
+ cash+=proceeds;realized+=result;if(result>=0)wins++;else losses++;
+ log('AUTO DEMO SELL '+openPair+' @ '+p.toFixed(2)+' · '+why+' · resultaat '+fmt(result));
+ qty=0;entry=0;stopPrice=0;targetPrice=0;openPair='';
+}
+function manageTrade(pair,signal,p){
+ if(qty){
+  if(pair!==openPair){return}
+  if(p<=stopPrice){closeTrade(p,'STOP-LOSS');return}
+  if(p>=targetPrice){closeTrade(p,'TAKE-PROFIT');return}
+  if(signal==='SELL'){closeTrade(p,'SIGNAAL');return}
+ }else if(signal==='BUY'){openTrade(pair,p)}
+}
+$('start').onclick=()=>{if(running)return;running=true;log('BOT GESTART · paper trading');cycle();timer=setInterval(cycle,30000);render()};
+$('stop').onclick=()=>{running=false;clearInterval(timer);timer=null;log('BOT GESTOPT · open positie blijft demo-open');render()};
+$('pair').onchange=()=>{lastPrice=null;cycle()};
+$('reset').onclick=()=>{if(running){alert('Stop eerst de bot.');return}cash=100;qty=0;entry=0;stopPrice=0;targetPrice=0;realized=0;openPair='';logs=[];wins=0;losses=0;render();cycle()};
+cycle();render();
+</script>
+</body></html>
